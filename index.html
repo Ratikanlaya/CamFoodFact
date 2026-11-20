@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สแกน QR / บาร์โค้ด</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root { --main:#0f766e; --bg:#f1f5f9; --card:#fff; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--main); color:#fff; padding:16px; text-align:center; }
+  header h1 { margin:0; font-size:1.3rem; }
+  main { max-width:560px; margin:auto; padding:16px; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  #reader { width:100%; border-radius:10px; overflow:hidden; background:#000; min-height:220px; }
+  #reader video { border-radius:10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  select, button, input[type=text], input[type=number] { font:inherit; padding:10px 14px; border-radius:10px; border:1px solid #cbd5e1; }
+  input[type=text], input[type=number] { width:100%; min-width:0; }
+  select { flex:1; min-width:0; background:#fff; }
+  button, .btn { cursor:pointer; background:var(--main); color:#fff; border:none; font:inherit; padding:10px 14px; border-radius:10px; }
+  button.secondary, .btn.secondary { background:#e2e8f0; color:var(--text); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  #result { font-size:1.1rem; word-break:break-all; padding:12px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; min-height:48px; }
+  #result.empty { background:#f8fafc; border-color:#e2e8f0; color:var(--muted); }
+  .fmt { font-size:.8rem; color:var(--muted); margin-top:4px; }
+  ul { list-style:none; padding:0; margin:0; max-height:300px; overflow:auto; }
+  li { padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; }
+  li span.t { color:var(--muted); font-size:.8rem; white-space:nowrap; }
+  a { color:var(--main); }
+  .status { font-size:.85rem; color:var(--muted); margin-top:8px; }
+  h2 { font-size:1rem; margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  h2 button, h2 .btn { padding:6px 10px; font-size:.85rem; }
+  .product { display:flex; gap:12px; align-items:flex-start; }
+  .product img { width:72px; height:72px; object-fit:contain; border-radius:8px; background:#f8fafc; }
+  .product .name { font-size:1.15rem; font-weight:700; }
+  .tag { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:99px; background:#e0f2fe; color:#075985; margin-top:4px; }
+  .tag.warn { background:#fef3c7; color:#92400e; }
+  .form label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  .nutri { width:100%; border-collapse:collapse; margin-top:10px; font-size:.95rem; }
+  .nutri td { padding:6px 4px; border-bottom:1px solid #e2e8f0; }
+  .nutri td.v { text-align:right; white-space:nowrap; }
+  .lvl { display:inline-block; min-width:64px; text-align:center; font-size:.8rem; font-weight:700; padding:2px 8px; border-radius:99px; margin-left:8px; }
+  .lvl.low  { background:#dcfce7; color:#166534; }
+  .lvl.mid  { background:#fef9c3; color:#854d0e; }
+  .lvl.high { background:#fee2e2; color:#991b1b; }
+  .error { margin-top:12px; padding:12px; border-radius:10px; background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; font-size:.92rem; line-height:1.6; }
+  .error b { display:block; margin-bottom:4px; }
+  .error ol { margin:4px 0 0; padding-left:20px; }
+  #reader { margin-top:12px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+</style>
+</head>
+<body>
+<header><h1>📷 สแกน QR Code / บาร์โค้ด</h1></header>
+<main>
+  <div class="card">
+    <button id="openCamBtn" style="width:100%;font-size:1.1rem;padding:14px">📷 เปิดกล้องสแกน</button>
+    <div id="reader" hidden></div>
+    <div class="row">
+      <button id="nextBtn" style="flex:1" hidden>🔄 สแกนชิ้นถัดไป</button>
+      <button id="closeCamBtn" class="secondary" style="flex:1" hidden>✕ ปิดกล้อง</button>
+    </div>
+    <div id="camError" class="error" hidden></div>
+    <div class="row" style="font-size:.9rem">
+      <label class="btn secondary" style="flex:1;text-align:center">
+        🖼 สแกนจากรูปภาพ<input type="file" id="fileInput" accept="image/*" hidden>
+      </label>
+    </div>
+    <div class="row" style="font-size:.9rem">
+      <label><input type="checkbox" id="beep" checked> เสียงแจ้งเตือน</label>
+    </div>
+    <div class="status" id="status">อ่านได้: EAN-13, EAN-8, UPC-A, UPC-E</div>
+  </div>
+
+  <div class="card">
+    <h2>⌨️ กรอกเลขเอง</h2>
+    <form id="manualForm" class="row" style="margin-top:0;flex-wrap:nowrap">
+      <input id="manualInput" type="text" inputmode="numeric" autocomplete="off" placeholder="พิมพ์เลขบาร์โค้ด แล้วกด Enter">
+      <button type="submit">ตกลง</button>
+    </form>
+    <div class="fmt">ใช้กับเครื่องยิงบาร์โค้ดแบบ USB/บลูทูธได้ด้วย: คลิกที่ช่องนี้แล้วยิงได้เลย</div>
+  </div>
+
+  <div class="card">
+    <h2>ผลลัพธ์ <button class="secondary" id="copyBtn">คัดลอก</button></h2>
+    <div id="result" class="empty">ยังไม่มีผลการสแกน</div>
+    <div class="fmt" id="fmt"></div>
+  </div>
+
+  <div class="card">
+    <h2>📦 ข้อมูลสินค้า</h2>
+    <div id="product" class="fmt">สแกนหรือกรอกเลขเพื่อดูข้อมูล</div>
+  </div>
+
+  <div class="card">
+    <h2>🗂 คลังข้อมูลสินค้า <span id="dbCount" class="fmt" style="margin:0"></span>
+      <span>
+        <label class="btn secondary">นำเข้า JSON/CSV<input type="file" id="importInput" accept=".json,.csv" hidden></label>
+        <button class="secondary" id="exportBtn">ส่งออก</button>
+      </span>
+    </h2>
+    <div class="fmt">ไฟล์นำเข้าต้องมีคอลัมน์บาร์โค้ด (barcode / code / บาร์โค้ด) และชื่อ (name / ชื่อ / drug_name) — คอลัมน์อื่นจะแสดงเป็นรายละเอียดเพิ่มเติม</div>
+  </div>
+
+  <div class="card">
+    <h2>ประวัติการสแกน
+      <span>
+        <button class="secondary" id="csvBtn">ดาวน์โหลด CSV</button>
+        <button class="secondary" id="clearBtn">ล้าง</button>
+      </span>
+    </h2>
+    <ul id="history"></ul>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function load(key, def){ try { return JSON.parse(localStorage.getItem(key)) ?? def; } catch(e){ return def; } }
+function save(key, val){ try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){} }
+
+let history = load("scanHistory", []);
+let db = load("productDB", {});
+let currentCode = "";
+
+function setStatus(t){ $("status").textContent = t; }
+function escapeHtml(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function linkify(s){
+  const e = escapeHtml(s);
+  return /^https?:\/\//i.test(s) ? `<a href="${e}" target="_blank" rel="noopener">${e}</a>` : e;
+}
+
+function beep(){
+  if (!$("beep").checked) return;
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(); o.frequency.value = 880;
+    o.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.12);
+  } catch(e) {}
+}
+
+/* ---------- ประวัติ ---------- */
+function renderHistory(){
+  $("history").innerHTML = history.length ? history.map(h => {
+    const name = db[h.text]?.name;
+    return `<li><div>${linkify(h.text)}${name ? `<div><b>${escapeHtml(name)}</b></div>` : ""}<div class="fmt">${escapeHtml(h.format)}</div></div><span class="t">${escapeHtml(h.time)}</span></li>`;
+  }).join("") : `<li style="color:var(--muted)">ยังไม่มีประวัติ</li>`;
+  save("scanHistory", history);
+  $("dbCount").textContent = `(${Object.keys(db).length} รายการ)`;
+}
+
+/* ---------- เมื่อได้เลขมาแล้ว (ใช้ร่วมกันทั้งกล้อง / รูปภาพ / พิมพ์เลข) ---------- */
+function handleCode(text, format){
+  $("result").className = ""; $("result").innerHTML = linkify(text);
+  $("fmt").textContent = format ? "ชนิด: " + format : "";
+  history.unshift({ text, format, time: new Date().toLocaleString("th-TH") });
+  renderHistory(); beep();
+  showProduct(text);
+}
+
+/* ---------- เกณฑ์โภชนาการ (ต่อ 100 กรัม) — แก้ตัวเลขได้ที่นี่ ----------
+   ต่ำ (เขียว)    : ค่า ≤ low
+   ปานกลาง (เหลือง): low < ค่า ≤ high
+   สูง (แดง)      : ค่า > high                                            */
+const LIMITS = {
+  sugars:    { label: "น้ำตาล",       low: 5,   high: 22.5 },
+  fat:       { label: "ไขมัน",        low: 3,   high: 17.5 },
+  saturated: { label: "ไขมันอิ่มตัว", low: 1.5, high: 5 },
+  salt:      { label: "เกลือ",        low: 0.3, high: 1.5 },
+};
+const SODIUM_TO_SALT = 2.5; // เกลือ = โซเดียม × 2.5
+
+// คีย์ต่อ 100 กรัม แบบ Open Food Facts (ใช้กับไฟล์นำเข้าได้ด้วย)
+const NUTRI_KEYS = { sugars: "sugars_100g", fat: "fat_100g", saturated: "saturated-fat_100g", salt: "salt_100g", sodium: "sodium_100g" };
+const ALL_NUTRI_KEYS = Object.values(NUTRI_KEYS);
+
+function num(v){ if (v === "" || v == null) return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
+
+function nutritionFrom(src){
+  if (!src) return null;
+  const n = {};
+  for (const k of ["sugars", "fat", "saturated", "salt"]) {
+    const v = num(src[NUTRI_KEYS[k]]);
+    if (v !== null) n[k] = v;
+  }
+  if (n.salt === undefined) {
+    const sodium = num(src[NUTRI_KEYS.sodium]);
+    if (sodium !== null) { n.salt = +(sodium * SODIUM_TO_SALT).toFixed(3); n.saltFromSodium = true; }
+  }
+  return Object.keys(n).length ? n : null;
+}
+
+function level(key, v){
+  const L = LIMITS[key];
+  if (v <= L.low)  return { cls: "low",  text: "ต่ำ" };
+  if (v > L.high)  return { cls: "high", text: "สูง" };
+  return { cls: "mid", text: "ปานกลาง" };
+}
+
+function nutritionHtml(n){
+  if (!n) return `<div class="fmt" style="margin-top:8px">ไม่มีข้อมูลโภชนาการ</div>`;
+  const rows = Object.keys(LIMITS).map(k => {
+    const L = LIMITS[k];
+    if (n[k] === undefined) return `<tr><td>${L.label}</td><td class="v fmt">ไม่มีข้อมูล</td></tr>`;
+    const lv = level(k, n[k]);
+    const note = k === "salt" && n.saltFromSodium ? ` <span class="fmt">(คำนวณจากโซเดียม)</span>` : "";
+    return `<tr><td>${L.label}${note}</td><td class="v">${n[k]} g<span class="lvl ${lv.cls}">${lv.text}</span></td></tr>`;
+  }).join("");
+  return `<table class="nutri"><tr><td colspan="2" class="fmt">ต่อ 100 กรัม</td></tr>${rows}</table>`;
+}
+
+/* ---------- ข้อมูลสินค้า ---------- */
+const MAIN_KEYS = ["name", "image", "nutrition"];
+function productHtml(code, p, source){
+  const extras = Object.entries(p).filter(([k, v]) => !MAIN_KEYS.includes(k) && v !== "" && v != null)
+    .map(([k, v]) => `<div class="fmt"><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`).join("");
+  return `<div class="product">
+      ${p.image ? `<img src="${escapeHtml(p.image)}" alt="">` : ""}
+      <div style="flex:1">
+        <div class="name">${escapeHtml(p.name || "(ไม่มีชื่อ)")}</div>
+        <div class="fmt">บาร์โค้ด: ${escapeHtml(code)}</div>
+        ${extras}
+        ${nutritionHtml(p.nutrition)}
+        <span class="tag ${source === "online" ? "warn" : ""}">${source === "online" ? "ข้อมูลจาก Open Food Facts" : "คลังของฉัน"}</span>
+      </div>
+    </div>`;
+}
+
+function formHtml(code, p = {}){
+  return `<form id="productForm" class="form">
+      <label>ชื่อสินค้า / ชื่อยา *</label>
+      <input type="text" id="pf_name" required value="${escapeHtml(p.name || "")}">
+      <div class="grid2">
+        <div><label>ขนาด / หน่วย</label><input type="text" id="pf_unit" value="${escapeHtml(p["ขนาด/หน่วย"] || "")}"></div>
+        <div><label>ราคา (บาท)</label><input type="number" step="0.01" id="pf_price" value="${escapeHtml(p["ราคา"] || "")}"></div>
+      </div>
+      <label>หมายเหตุ</label>
+      <input type="text" id="pf_note" value="${escapeHtml(p["หมายเหตุ"] || "")}">
+      <div class="row"><button type="submit" style="flex:1">💾 บันทึกเข้าคลัง</button></div>
+    </form>`;
+}
+
+function bindForm(code, base = {}){
+  $("productForm").onsubmit = e => {
+    e.preventDefault();
+    const p = { ...base, name: $("pf_name").value.trim() };
+    const set = (k, v) => { v = v.trim(); if (v) p[k] = v; else delete p[k]; };
+    set("ขนาด/หน่วย", $("pf_unit").value);
+    set("ราคา", $("pf_price").value);
+    set("หมายเหตุ", $("pf_note").value);
+    db[code] = p; save("productDB", db); renderHistory();
+    showProduct(code);
+  };
+}
+
+async function lookupOnline(code){
+  if (!/^\d{8,14}$/.test(code)) return null;
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_th,brands,quantity,image_front_small_url,nutriments`);
+    const j = await r.json();
+    if (j.status !== 1 || !j.product) return null;
+    const pr = j.product, p = { name: pr.product_name_th || pr.product_name || "" };
+    if (pr.brands) p["ยี่ห้อ"] = pr.brands;
+    if (pr.quantity) p["ขนาด/หน่วย"] = pr.quantity;
+    if (pr.image_front_small_url) p.image = pr.image_front_small_url;
+    const nutri = nutritionFrom(pr.nutriments);
+    if (nutri) p.nutrition = nutri;
+    return p.name ? p : null;
+  } catch(e) { return null; }
+}
+
+async function showProduct(code){
+  currentCode = code;
+  const box = $("product");
+  box.className = "";
+
+  if (db[code]) {
+    box.innerHTML = productHtml(code, db[code], "local") +
+      `<div class="row"><button class="secondary" id="editBtn" style="flex:1">✏️ แก้ไข</button>
+       <button class="secondary" id="delBtn">🗑 ลบ</button></div>`;
+    $("editBtn").onclick = () => { box.innerHTML = formHtml(code, db[code]); bindForm(code, db[code]); };
+    $("delBtn").onclick = () => { if (confirm("ลบสินค้านี้ออกจากคลัง?")) { delete db[code]; save("productDB", db); renderHistory(); showProduct(code); } };
+    return;
+  }
+
+  box.innerHTML = `<div class="fmt">ไม่พบในคลัง กำลังค้นหาออนไลน์...</div>`;
+  const online = await lookupOnline(code);
+  if (code !== currentCode) return; // มีการสแกนใหม่ระหว่างรอ
+
+  if (online) {
+    box.innerHTML = productHtml(code, online, "online") +
+      `<div class="row"><button id="saveOnlineBtn" style="flex:1">💾 บันทึกเข้าคลัง (แก้ไขได้)</button></div>`;
+    $("saveOnlineBtn").onclick = () => { box.innerHTML = formHtml(code, online); bindForm(code, online); };
+  } else {
+    box.innerHTML = `<div class="tag warn">ไม่พบข้อมูลของ ${escapeHtml(code)}</div>
+      <div class="fmt" style="margin-top:6px">เพิ่มข้อมูลสินค้านี้ได้เลย ครั้งต่อไปที่สแกนจะแสดงทันที</div>` + formHtml(code);
+    bindForm(code);
+  }
+}
+
+/* ---------- นำเข้า / ส่งออกคลัง ---------- */
+function parseCSV(text){
+  const rows = []; let row = [], cur = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') q = false;
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(cur); cur = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i+1] === "\n") i++;
+      row.push(cur); rows.push(row); row = []; cur = "";
+    } else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  const head = rows.shift().map(h => h.trim());
+  return rows.filter(r => r.some(v => v.trim())).map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+const CODE_KEYS = ["barcode", "code", "บาร์โค้ด", "รหัส", "ean", "gtin"];
+const NAME_KEYS = ["name", "ชื่อ", "ชื่อยา", "ชื่อสินค้า", "drug_name", "product_name", "drugname"];
+function pick(obj, keys){
+  const k = Object.keys(obj).find(k => keys.includes(k.toLowerCase().trim()));
+  return k;
+}
+
+$("importInput").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const text = (await f.text()).replace(/^﻿/, "");
+    let items;
+    if (f.name.toLowerCase().endsWith(".csv")) items = parseCSV(text);
+    else {
+      const j = JSON.parse(text);
+      items = Array.isArray(j) ? j : (Object.values(j).find(Array.isArray) || []);
+    }
+    let n = 0;
+    for (const it of items) {
+      const ck = pick(it, CODE_KEYS); if (!ck || !it[ck]) continue;
+      const nk = pick(it, NAME_KEYS);
+      const p = { name: nk ? String(it[nk]) : "" };
+      for (const [k, v] of Object.entries(it))
+        if (k !== ck && k !== nk && !ALL_NUTRI_KEYS.includes(k) && typeof v !== "object") p[k] = v;
+      const nutri = nutritionFrom(it);
+      if (nutri) p.nutrition = nutri;
+      db[String(it[ck]).trim()] = p; n++;
+    }
+    save("productDB", db); renderHistory();
+    alert(n ? `นำเข้า ${n} รายการแล้ว` : "ไม่พบคอลัมน์บาร์โค้ดในไฟล์ (ต้องชื่อ barcode, code หรือ บาร์โค้ด)");
+    if (currentCode) showProduct(currentCode);
+  } catch(err) { alert("อ่านไฟล์ไม่ได้: " + err.message); }
+  e.target.value = "";
+};
+
+$("exportBtn").onclick = () => {
+  const arr = Object.entries(db).map(([barcode, p]) => ({ barcode, ...p }));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" }));
+  a.download = "product_db.json"; a.click();
+};
+
+/* ---------- กล้อง ---------- */
+let scanner = null;
+let scanLocked = false;  // กันอ่านซ้ำ: true ตั้งแต่อ่านได้ครั้งแรกจนกดสแกนใหม่
+
+function getScanner(){
+  if (scanner) return scanner;
+  if (typeof Html5Qrcode === "undefined") throw new Error("LIB_NOT_LOADED");
+  const F = Html5QrcodeSupportedFormats;
+  scanner = new Html5Qrcode("reader", {
+    formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E],
+    useBarCodeDetectorIfSupported: true,
+    verbose: false
+  });
+  return scanner;
+}
+
+function showCamError(err){
+  const msg = String(err?.name || "") + " " + String(err?.message || err || "");
+  let title, steps;
+
+  if (msg.includes("LIB_NOT_LOADED")) {
+    title = "โหลดตัวสแกนไม่สำเร็จ";
+    steps = ["ตรวจสอบว่าเครื่องต่ออินเทอร์เน็ตอยู่ แล้วรีเฟรชหน้านี้",
+             "ระหว่างนี้พิมพ์เลขบาร์โค้ดในช่อง \"กรอกเลขเอง\" แทนได้"];
+  } else if (!window.isSecureContext) {
+    title = "หน้านี้ไม่ได้เปิดผ่าน https เบราว์เซอร์จึงไม่ยอมให้ใช้กล้อง";
+    steps = ["เปิดหน้าเว็บผ่านลิงก์ที่ขึ้นต้นด้วย https:// (เช่น GitHub Pages)",
+             "ถ้าทดสอบในเครื่อง ให้เปิดผ่าน http://localhost แทนการดับเบิลคลิกไฟล์"];
+  } else if (/NotAllowed|Permission|denied/i.test(msg)) {
+    title = "ยังไม่ได้อนุญาตให้ใช้กล้อง";
+    steps = ["แตะไอคอน 🔒 หรือ ⓘ ข้างช่องที่อยู่เว็บ → การอนุญาต/สิทธิ์ → กล้อง → อนุญาต",
+             "iPhone: การตั้งค่า → Safari → กล้อง → อนุญาต",
+             "Android: การตั้งค่า → แอป → Chrome → สิทธิ์ → กล้อง → อนุญาต",
+             "จากนั้นรีเฟรชหน้า แล้วกด \"เปิดกล้องสแกน\" อีกครั้ง"];
+  } else if (/NotFound|no camera|Requested device not found|DevicesNotFound/i.test(msg)) {
+    title = "ไม่พบกล้องในเครื่องนี้";
+    steps = ["ใช้มือถือหรือแท็บเล็ตที่มีกล้องหลัง หรือต่อเว็บแคม",
+             "หรือพิมพ์เลขในช่อง \"กรอกเลขเอง\" / ใช้ปุ่ม \"สแกนจากรูปภาพ\""];
+  } else if (/NotReadable|TrackStart|Could not start|in use/i.test(msg)) {
+    title = "กล้องถูกใช้งานโดยแอปอื่นอยู่";
+    steps = ["ปิดแอปหรือแท็บอื่นที่เปิดกล้องอยู่ (เช่น LINE, Zoom, แอปกล้อง)",
+             "แล้วกด \"เปิดกล้องสแกน\" อีกครั้ง ถ้ายังไม่ได้ให้รีสตาร์ตเบราว์เซอร์"];
+  } else {
+    title = "เปิดกล้องไม่ได้";
+    steps = ["รีเฟรชหน้าแล้วลองใหม่",
+             "ลองเปิดด้วย Chrome (Android) หรือ Safari (iPhone) เวอร์ชันล่าสุด",
+             "ถ้ายังไม่ได้ ให้พิมพ์เลขในช่อง \"กรอกเลขเอง\" แทน"];
+  }
+  $("camError").innerHTML = `<b>⚠️ ${escapeHtml(title)}</b><ol>${steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
+    <div class="fmt" style="color:#991b1b;margin-top:6px">รายละเอียด: ${escapeHtml(msg.trim() || "-")}</div>`;
+  $("camError").hidden = false;
+}
+
+function setCamUI(state){ // "idle" | "scanning" | "done"
+  $("openCamBtn").hidden = state !== "idle";
+  $("reader").hidden = state !== "scanning";
+  $("closeCamBtn").hidden = state !== "scanning";
+  $("nextBtn").hidden = state !== "done";
+}
+
+async function openCamera(){
+  $("camError").hidden = true;
+  scanLocked = false;
+  let sc;
+  try { sc = getScanner(); } catch(e) { showCamError(e); return; }
+  if (sc.isScanning) return;
+  $("openCamBtn").disabled = $("nextBtn").disabled = true;
+  setStatus("กำลังเปิดกล้อง...");
+  setCamUI("scanning");
+  try {
+    await sc.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: (w, h) => ({ width: Math.floor(w * 0.85), height: Math.floor(Math.min(h, w) * 0.45) }) },
+      onCameraScan,
+      () => {}
+    );
+    setStatus("เล็งกล้องไปที่บาร์โค้ดให้อยู่ในกรอบ");
+  } catch(e) {
+    setCamUI("idle");
+    setStatus("");
+    showCamError(e);
+  } finally {
+    $("openCamBtn").disabled = $("nextBtn").disabled = false;
+  }
+}
+
+async function stopCamera(){
+  try { if (scanner?.isScanning) await scanner.stop(); } catch(e) {}
+}
+
+async function onCameraScan(text, info){
+  if (scanLocked) return;         // กันอ่านซ้ำ
+  scanLocked = true;
+  if (navigator.vibrate) navigator.vibrate(150);
+  await stopCamera();             // หยุดกล้องทันที
+  setCamUI("done");
+  setStatus("อ่านได้แล้ว — กด \"สแกนชิ้นถัดไป\" เพื่อสแกนต่อ");
+  handleCode(text, info?.result?.format?.formatName || "");
+}
+
+$("openCamBtn").onclick = openCamera;
+$("nextBtn").onclick = openCamera;
+$("closeCamBtn").onclick = async () => { await stopCamera(); setCamUI("idle"); setStatus("ปิดกล้องแล้ว"); };
+
+$("fileInput").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  e.target.value = "";
+  let sc;
+  try { sc = getScanner(); } catch(err) { showCamError(err); return; }
+  await stopCamera(); setCamUI("idle");
+  try { const r = await sc.scanFileV2(f, false); handleCode(r.decodedText, r?.result?.format?.formatName || "รูปภาพ"); }
+  catch(err) { setStatus("ไม่พบบาร์โค้ด EAN/UPC ในรูปนี้"); }
+};
+
+/* ---------- กรอกเลขเอง ---------- */
+$("manualForm").onsubmit = e => {
+  e.preventDefault();
+  const v = $("manualInput").value.trim();
+  if (!v) { $("manualInput").focus(); return; }
+  handleCode(v, "กรอกเอง");
+  $("manualInput").value = "";
+};
+
+/* ---------- อื่น ๆ ---------- */
+$("copyBtn").onclick = () => {
+  if ($("result").classList.contains("empty")) return;
+  navigator.clipboard?.writeText($("result").textContent).then(() => setStatus("คัดลอกแล้ว"));
+};
+$("clearBtn").onclick = () => { if (confirm("ล้างประวัติทั้งหมด?")) { history = []; renderHistory(); } };
+$("csvBtn").onclick = () => {
+  const rows = [["เวลา","ชนิด","บาร์โค้ด","ชื่อสินค้า"], ...history.map(h => [h.time, h.format, h.text, db[h.text]?.name || ""])];
+  const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = "scan_history.csv"; a.click();
+};
+
+renderHistory();
+</script>
+</body>
+</html>
